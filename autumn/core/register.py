@@ -15,16 +15,23 @@ class _Dependency:
 
 
 @dataclass
-class _InjectableProperty:
+class _Property:
     name: str
     optional: bool
+
+
+@dataclass
+class BaseInjectable:
+    pass
+
 
 @dataclass
 class InjectableProperty:
     name: str
 
+
 @dataclass
-class _Injectable:
+class InjectableDependency:
     pass
 
 
@@ -36,7 +43,7 @@ class Component:
     interface: Any | None
     profiles: tuple[str] = ()
     dependencies: dict[str, _Dependency] = field(default_factory=dict)
-    properties: dict[str, _InjectableProperty] = field(default_factory=dict)
+    properties: dict[str, _Property] = field(default_factory=dict)
 
 def create_component(
     *,
@@ -49,30 +56,31 @@ def create_component(
     for name, original_type_hint in cls.__annotations__.items():
         type_hint = extract_from_hint(original_type_hint)
         match type_hint:
-            case Annotated(Optional(Particular(t)), (Particular(_Injectable()),)):
+            case Annotated(Optional(Particular(t)), (Particular(InjectableDependency()),)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=True)
                 dependencies[name] = dependency
-            case Annotated(Particular(t), (Particular(_Injectable()),)):
+            case Annotated(Particular(t), (Particular(InjectableDependency()),)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=False)
                 dependencies[name] = dependency
-            case Annotated(Collection(ct, Particular(t)), (Particular(_Injectable()),)):
+            case Annotated(Collection(ct, Particular(t)), (Particular(InjectableDependency()),)):
                 dependency = _Dependency(interface=t,
                                         collection=ct,
                                         optional=False)
                 dependencies[name] = dependency
+            
             case Annotated(Optional(), (Particular(origin=InjectableProperty(n)),)):
-                property = _InjectableProperty(name=n, optional=True)
+                property = _Property(name=n, optional=True)
                 properties[name] = property
             case Annotated(_, (Particular(origin=InjectableProperty(n)),)):
-                property = _InjectableProperty(name=n, optional=False)
+                property = _Property(name=n, optional=False)
                 properties[name] = property
-            case Annotated(_, (Particular(InjectableProperty()) | Particular(_Injectable()), _)):
+            case Annotated(_, (Particular(InjectableProperty()) | Particular(InjectableDependency()), _)):
                 raise AutomnConfigurationError(f"Too many arguments in type annotation for field {name}")
-            case Annotated(_, (Particular(InjectableProperty()) | Particular(_Injectable()),)):
+            case Annotated(_, (Particular(InjectableProperty()) | Particular(InjectableDependency()),)):
                 raise AutomnConfigurationError(f"Type annotation for field `{name}` "
                                            "contains a marker of injectable field, but "
                                            "Autumn component cannot be created for type "

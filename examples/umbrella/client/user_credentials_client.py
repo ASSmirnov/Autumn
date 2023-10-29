@@ -35,3 +35,20 @@ class UserCredentialClient:
     @autowired_method
     def method_injected(self, i: Annotated[Volatile, Injectable], a: int) -> None:
         print("autowired method call", i.say(), a)
+
+
+# @session(name="MyTaksSession")
+# class MyTaskSession(BaseSession):
+    
+#     def __enter__(self):
+#         pass
+
+#     def __exit__(self):
+#         pass
+
+#     def get_instance(self):
+#         pass
+
+# @component(scope="MyTaskSession")
+# class Foo:
+#     sessionObjet: Annotated[SessionObject, Property("session:MyTaskSession")]

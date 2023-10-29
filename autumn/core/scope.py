@@ -1,5 +1,6 @@
-from typing import Any, Mapping
-from autumn.exceptions import AutomnConfigurationError, AutomnPropertyNotSet
+from abc import ABC, abstractmethod
+from typing import Any, Generic, Mapping, TypeVar
+from autumn.exceptions import AutomnConfigurationError, AutomnPropertyNotSet, AutomnSessionNotEntered
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from autumn.core.register import Component, Register
@@ -124,3 +125,28 @@ def get_instance(register: "Register",
     with draft_storage:
         scope = _get_scope(component)
         return scope.get_instance(register, component, properties)
+
+_T = TypeVar("_T")
+
+class BaseSession(ABC, Generic[_T]):
+
+    def __init__(self, name: str) -> None:
+        self._session_object: _T | None = None
+        self._entered: bool = False
+        self._name: str = name
+
+    def __enter__(self):
+        self._session_object = self.create_session_object()
+        self._entered = True
+
+    def __exit__(self, type, value, traceback) -> None:
+        self._session_object = None
+        self._entered = False
+
+    def get_session_object(self):
+        if not self._entered:
+            raise AutomnSessionNotEntered(f"Session {self._name} not entered")
+
+    @abstractmethod
+    def create_session_object(self) -> _T:
+        ...
