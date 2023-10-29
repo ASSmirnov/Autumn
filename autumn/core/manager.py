@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, LiteralString, Mapping, TypeVar
+from typing import Any, LiteralString, Mapping, TypeVar, overload
 
 from .register import Register, create_register_instance
 from autumn.exceptions import AutomnConfigurationError
@@ -34,8 +34,10 @@ class _ManagerInstance:
                                                   self._config.properties.keys())
         self.properties = MappingProxyType(self._config.properties)
 
-    def get_instance(self, interface: _T) -> _T:
-        return self._register.get_instance(interface, self.properties or {})
+    def get_instance(self, interface: _T, optional: bool = False) -> _T:
+        return self._register.get_instance(interface, 
+                                           self.properties or {},
+                                           optional)
 
     def get_instances(self, interface: _T) -> list[_T]:
         return self._register.get_instances(interface, self.properties or {})
@@ -84,10 +86,21 @@ class _Manager:
         self._instance.start()
         self._started = True
     
-    def get_instance(self, interface: _T) -> _T:
+    @overload
+    def get_instance(self, 
+                     interface: _T) -> _T:
+        ...
+    
+    @overload
+    def get_instance(self, 
+                     interface: _T,
+                     optional: bool) -> _T | None:
+        ...
+
+    def get_instance(self, interface: _T, optional: bool=False):
         if not self._started:
             raise AutomnConfigurationError("Attempn to get instance before dm start")
-        return self._instance.get_instance(interface)
+        return self._instance.get_instance(interface, optional)
 
     def get_instances(self, interface: _T) -> list[_T]:
         if not self._started:

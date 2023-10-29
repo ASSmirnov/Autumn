@@ -1,5 +1,5 @@
 from typing import Annotated, ClassVar
-from autumn.public import Property, Injectable, component, SINGLETON, PROTOTYPE, dm
+from autumn.public import Property, Injectable, autowired_method, component, SINGLETON, PROTOTYPE, dm
 
 from .types import UmbrellaClient
 
@@ -27,6 +27,11 @@ class UserCredentialClient:
 
     def request(self) -> dict:
         volatile = dm.get_instance(Volatile)
+        self.method_injected(a=100)
         return {"payload": self.toggles_provider.get_toggles(), 
                 "say": volatile.say(),
                 "credentials": self.credentials}
+
+    @autowired_method
+    def method_injected(self, i: Annotated[Volatile, Injectable], a: int) -> None:
+        print("autowired method call", i.say(), a)

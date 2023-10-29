@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Self, Type, TypeVar
+from typing import Iterable, Mapping, Self, Type, TypeVar, overload
 from uuid import uuid4
 from traitlets import Any
 from autumn.core.scope import can_inject_dependency, get_instance
@@ -26,8 +26,6 @@ class InjectableProperty:
 @dataclass
 class _Injectable:
     pass
-
-Injectable = _Injectable()
 
 
 @dataclass
@@ -136,9 +134,27 @@ class Register:
     def get_instances(self, interface: _T, properties: Mapping[str, Any]) -> list[_T]:
         components = self.get_compnonents(interface)
         return [self.get_instance(self, component, properties) for component in components]
+    
+    @overload
+    def get_instance(self, interface: _T,
+                    properties: Mapping[str, Any]) -> _T:
+        ...
+    
+    @overload
+    def get_instance(self, interface: _T,
+                     properties: Mapping[str, Any],
+                     optional: bool) -> _T | None:
+        ...
 
-    def get_instance(self, interface: _T, properties: Mapping[str, Any]) -> _T:
-        component = self.get_compnonent(interface)
+    def get_instance(self, interface: _T,
+                     properties: Mapping[str, Any],
+                     optional: bool = False):
+        try:
+            component = self.get_compnonent(interface)
+        except AutomnComponentNotFound:
+            if optional:
+                return None
+            raise
         return get_instance(self, component, properties)
     
 
