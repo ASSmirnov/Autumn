@@ -28,7 +28,7 @@ class Collection:
 
 
 
-def extract_from_hint(type_hint: Any) -> Generic | Particular | Optional:
+def extract_from_hint(type_hint: Any) -> Generic | Particular | Optional | Annotated | Collection:
     origin_type = get_origin(type_hint)
     if not origin_type:
         return Particular(origin=type_hint)
@@ -46,6 +46,7 @@ def extract_from_hint(type_hint: Any) -> Generic | Particular | Optional:
     
     if origin_type == list:
         return Collection(type=list, item_type=extract_from_hint(args[0]))
+    
     if origin_type == tuple:
         if (len(args) == 2 and Ellipsis in args) or len(args) == 1:
             return Collection(collection_type=tuple, item_type=extract_from_hint(args[0]))

@@ -3,9 +3,10 @@ from functools import wraps
 from typing import Any, Type, dataclass_transform
 from autumn.exceptions import AutomnConfigurationError
 
-from autumn.helpers.type_hints import Annotated, Collection, Optional, Particular, extract_from_hint
+from autumn.helpers.type_hints import Collection, Optional
+from .core.register import dependency_descrition
 
-from .core.register import register, create_component, InjectableProperty, InjectableDependency
+from .core.register import register, create_component, InjectableDependency, InjectableType
 from .core.manager import dm
 from .core.scope import SINGLETON, PROTOTYPE, BaseSession
 
@@ -42,30 +43,27 @@ class _Dependency:
 def autowired_method(func):
     dependencies: dict[str, _Dependency] = {} 
     for name, original_type_hint in func.__annotations__.items():
-        type_hint = extract_from_hint(original_type_hint)
+        type_hint = dependency_descrition(original_type_hint)
         match type_hint:
-            case Annotated(Optional(Particular(t)), (Particular(InjectableDependency()),)):
+            case (Optional(t), InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=True)
                 dependencies[name] = dependency
-            case Annotated(Particular(t), (Particular(InjectableDependency()),)):
+            case (t, InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=False)
                 dependencies[name] = dependency
-            case Annotated(Collection(ct, Particular(t)), (Particular(InjectableDependency()),)):
+            case (Collection(ct, t), InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=ct,
                                         optional=False)
                 dependencies[name] = dependency
-            case Annotated(_, (Particular(InjectableDependency()), _)):
-                raise AutomnConfigurationError(f"Too many arguments in type annotation for argument {name}")
-            case Annotated(_, (Particular(InjectableDependency()),)):
-                raise AutomnConfigurationError(f"Type annotation for argument `{name}` "
-                                           "contains a marker of injectable argument, but "
-                                           "Autumn component cannot be created for type "
-                                           f"annotation {original_type_hint}")
+            case(_, InjectableDependency(InjectableType.property)):
+                raise AutomnConfigurationError(f"Injectable properties are not supported for"
+                                               "autowared methods yet")
+            
     @wraps(func)
     def decorator(*args, **kwargs):
         kw: dict[str, Any] = {}
@@ -97,8 +95,12 @@ def session(name: str, profiles: tuple[str, ...] = ()):
                         )(cls)
         return cls
 
-Injectable = InjectableDependency()
-Property = InjectableProperty
+Injectable = InjectableDependency(type=InjectableType.component, args=())
+
+def _property(name: str) -> InjectableDependency:
+    return InjectableDependency(type=InjectableType.property, args=(name, ))
+
+Property = _property
 dm = dm
 SINGLETON = SINGLETON
 PROTOTYPE = PROTOTYPE

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Iterable, Mapping, Self, Type, TypeVar, overload
 from uuid import uuid4
 from traitlets import Any
@@ -20,19 +21,16 @@ class _Property:
     optional: bool
 
 
-@dataclass
-class BaseInjectable:
-    pass
 
-
-@dataclass
-class InjectableProperty:
-    name: str
+class InjectableType(Enum):
+    property = "p"
+    component = "c"
 
 
 @dataclass
 class InjectableDependency:
-    pass
+    type: InjectableType
+    args: tuple[Any]
 
 
 @dataclass
@@ -45,6 +43,35 @@ class Component:
     dependencies: dict[str, _Dependency] = field(default_factory=dict)
     properties: dict[str, _Property] = field(default_factory=dict)
 
+
+def dependency_descrition(original_type_hint: Any) -> (Any, Any):
+    type_hint = extract_from_hint(original_type_hint) 
+    match type_hint:
+        case Annotated(Optional(Particular(a)), (Particular(b),)):
+            return (Optional(a), b)
+        case Annotated(Collection(ct, Particular(a)), (Particular(b),)):
+            return (Collection(ct, a), b)
+        case Annotated(Particular(a), (Particular(b),)):
+            return (a, b)
+        case Annotated(a, (Particular(b),)):
+            match b:
+                case InjectableDependency(InjectableType.property):
+                    return (a, b)
+                case _:
+                    raise AutomnConfigurationError(f"Type annotation contains a marker of injectable "
+                                           "field, but Autumn cannot creat for type "
+                                           f"annotation {original_type_hint}")
+        case Annotated(_, (*a,)):
+            for i in a:
+                match i:
+                    case Particular(InjectableDependency()):
+                        raise AutomnConfigurationError(f"Too many arguments in type annotation.")
+    return type_hint
+        # case _:
+        #     raise AutomnConfigurationError(f"Type annotation contains a marker of injectable "
+        #                             "field, but Autumn cannot create component for type "
+        #                             f"annotation {original_type_hint}")
+
 def create_component(
     *,
     interface: Any | None,
@@ -54,43 +81,30 @@ def create_component(
     dependencies = {}
     properties = {}
     for name, original_type_hint in cls.__annotations__.items():
-        type_hint = extract_from_hint(original_type_hint)
+        type_hint = dependency_descrition(original_type_hint)
         match type_hint:
-            case Annotated(Optional(Particular(t)), (Particular(InjectableDependency()),)):
+            case (Optional(t), InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=True)
                 dependencies[name] = dependency
-            case Annotated(Particular(t), (Particular(InjectableDependency()),)):
+            case (t, InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=None,
                                         optional=False)
                 dependencies[name] = dependency
-            case Annotated(Collection(ct, Particular(t)), (Particular(InjectableDependency()),)):
+            case (Collection(ct, t), InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                         collection=ct,
                                         optional=False)
                 dependencies[name] = dependency
-            
-            case Annotated(Optional(), (Particular(origin=InjectableProperty(n)),)):
+            case (Optional(), InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=True)
                 properties[name] = property
-            case Annotated(_, (Particular(origin=InjectableProperty(n)),)):
+            case (_, InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=False)
                 properties[name] = property
-            case Annotated(_, (Particular(InjectableProperty()) | Particular(InjectableDependency()), _)):
-                raise AutomnConfigurationError(f"Too many arguments in type annotation for field {name}")
-            case Annotated(_, (Particular(InjectableProperty()) | Particular(InjectableDependency()),)):
-                raise AutomnConfigurationError(f"Type annotation for field `{name}` "
-                                           "contains a marker of injectable field, but "
-                                           "Autumn component cannot be created for type "
-                                           f"annotation {original_type_hint}")
-            case _:
-                if name not in cls.__dict__:
-                    raise AutomnConfigurationError(f"Annotation should be injectable component, "
-                                               "or injectable property, other types of annotations "
-                                               f"are not permitted for components, check `{name}` "
-                                               f"field of component {cls}")
+    
     return Component(id=str(uuid4()),
                      scope=scope,
                      cls=cls, 
