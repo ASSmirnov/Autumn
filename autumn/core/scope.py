@@ -28,6 +28,8 @@ draft_storage = _DraftStorage()
 
 SINGLETON = "singleton"
 PROTOTYPE = "prototype"
+SESSION = "session"
+
 
 class _SingletonScope:
 
@@ -55,13 +57,6 @@ class _PrototypeScope:
 
 _singleton_scope = _SingletonScope()
 _prototype_scope = _PrototypeScope()
-
-_scopes_weight = {SINGLETON: 2, PROTOTYPE: 0}
-
-def can_inject_dependency(component: "Component", dependency: "Component") -> bool:
-    component_weight = _scopes_weight.get(component.scope, 1) 
-    dependency_weight = _scopes_weight.get(dependency.scope, 1)
-    return component_weight <= dependency_weight
 
 
 def _get_scope(component: "Component") -> _SingletonScope | _PrototypeScope:
@@ -127,26 +122,3 @@ def get_instance(register: "Register",
         return scope.get_instance(register, component, properties)
 
 _T = TypeVar("_T")
-
-class BaseSession(ABC, Generic[_T]):
-
-    def __init__(self, name: str) -> None:
-        self._session_object: _T | None = None
-        self._entered: bool = False
-        self._name: str = name
-
-    def __enter__(self):
-        self._session_object = self.create_session_object()
-        self._entered = True
-
-    def __exit__(self, type, value, traceback) -> None:
-        self._session_object = None
-        self._entered = False
-
-    def get_session_object(self):
-        if not self._entered:
-            raise AutomnSessionNotEntered(f"Session {self._name} not entered")
-
-    @abstractmethod
-    def create_session_object(self) -> _T:
-        ...

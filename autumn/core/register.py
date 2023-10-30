@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Iterable, Mapping, Self, Type, TypeVar, overload
+import inspect
+from typing import Iterable, Mapping, Type, TypeVar, overload
 from uuid import uuid4
 from traitlets import Any
-from autumn.core.scope import can_inject_dependency, get_instance
+from autumn.core.scope import SESSION, SINGLETON, get_instance
 from autumn.exceptions import AutomnComponentNotFound, AutomnConfigurationError, AutomnAmbiguousDependency
 from autumn.helpers.type_hints import extract_from_hint, Annotated, Collection, Optional, Particular
 
@@ -25,6 +26,7 @@ class _Property:
 class InjectableType(Enum):
     property = "p"
     component = "c"
+    session_object = "s"
 
 
 @dataclass
@@ -67,10 +69,7 @@ def dependency_descrition(original_type_hint: Any) -> (Any, Any):
                     case Particular(InjectableDependency()):
                         raise AutomnConfigurationError(f"Too many arguments in type annotation.")
     return type_hint
-        # case _:
-        #     raise AutomnConfigurationError(f"Type annotation contains a marker of injectable "
-        #                             "field, but Autumn cannot create component for type "
-        #                             f"annotation {original_type_hint}")
+
 
 def create_component(
     *,
@@ -104,6 +103,10 @@ def create_component(
             case (_, InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=False)
                 properties[name] = property
+            case (_, InjectableDependency(InjectableType.session_object)):
+                raise AutomnConfigurationError("InjectabjeSession is not applicable on "
+                                               "component definition level. You may use "
+                                               "injection with `autowared_method`")
     
     return Component(id=str(uuid4()),
                      scope=scope,
@@ -119,40 +122,50 @@ _T = TypeVar("_T")
 class Register:
     def __init__(self) -> None:
         self._components: dict[Any, list[Component]] = {}
+        self._scopes: dict[Any, list[Component]] = {}
+    
+    def _get_id(self, interface: Type) -> int:
+        file = inspect.getfile(interface)
+        return f"{file}:{interface.__name__}"
 
     def register_component(self, component: Component) -> None:
-        key = component.interface if component.interface else component.cls
-        self._components.setdefault(key, []).append(component)
+        interface = component.interface if component.interface else component.cls
+        key = self._get_id(interface)
+        if component.scope == SESSION:
+            component.scope = SINGLETON
+            if key not in self._scopes:
+                self._scopes.setdefault(key, []).append(component)
+        else:
+            if key not in self._components:
+                self._components.setdefault(key, []).append(component)
 
     def check(self, properties: Iterable[str]) -> None:
         properties = set(properties)
         for _, components in self._components.items():
             for component in components:
                 for field_name, dependency in component.dependencies.items():
-                    if dependency.interface not in self._components:
+                    registered_dependencies = self.get_compnonents(dependency.interface)
+                    if not registered_dependencies:
                         if not dependency.optional:
                             raise AutomnConfigurationError("Unsatisfied dependency found for "
                             f"component {component.cls} for field `{field_name}` but the "
                             "dependency is not optional")
                         else:
                             continue
-                    registered_dependencies = self._components[dependency.interface]
                     if len(registered_dependencies) > 1 and dependency.collection is None:
                         raise AutomnConfigurationError("Ambiguous dependencies found "
                             f"for component {component.cls} for field `{field_name}`, "
                             "more than one candidates found but the dependency is not a collection")
-                    for registered_dependecy in registered_dependencies:
-                        if not can_inject_dependency(component, registered_dependecy):
-                            raise AutomnConfigurationError("Scope of component is shorter "
-                                f"that scope of dependency, component: {component.cls}, "
-                                f"dependency: {registered_dependecy.cls}")
                 for property_name, property in component.properties.items():
                     if property_name not in properties:
                         if not property.optional:
                             raise AutomnConfigurationError("Unsatisfied dependency found for "
                             f"component {component.cls} for field `{property_name}`, "
                              "property value was not provided but the dependency is not optional")
-    
+        for _, components in self._scopes.items():
+            if len(components) > 1:
+                raise AutomnConfigurationError(f"More than one scope is associatad with type {components[0].interface}")
+
     def get_instances(self, interface: _T, properties: Mapping[str, Any]) -> list[_T]:
         components = self.get_compnonents(interface)
         return [self.get_instance(self, component, properties) for component in components]
@@ -180,16 +193,31 @@ class Register:
         return get_instance(self, component, properties)
     
 
-    def get_compnonent(self, interface: Any) -> Component:
-        components = self._components.get(interface)
+    def get_session_object(self, interface: Type[_T], 
+                           properties: Mapping[str, Any],
+                           optional: bool=False) -> _T:
+
+        key = self._get_id(interface)
+        components = self._scopes.get(key)
         if components is None:
+            if optional:
+                return None
+            raise AutomnComponentNotFound(f"No scopes associated with {interface}")
+        scope_instance = get_instance(self, components[0], properties)
+        return scope_instance.get_instance()
+            
+
+    def get_compnonent(self, interface: Any) -> Component:
+        components = self.get_compnonents(interface)
+        if not components:
             raise AutomnComponentNotFound(f"No registered component for interface {interface}")
         if len(components) > 1:
             raise AutomnAmbiguousDependency(f"More than one component registered for interface {interface}")
         return components[0]
 
     def get_compnonents(self, interface: Any) -> list[Component]:
-        components = self._components.get(interface)[:]
+        key = self._get_id(interface)
+        components = self._components.get(key, [])[:]
         return components
 
 
@@ -197,14 +225,20 @@ class Register:
 def create_register_instance(profiles: Iterable[str], properties: Iterable[str]) -> Register:
     profiles = set(profiles)
     register_instance = Register()
-    global register
-    for _, components in register._components.items():
-        for component in components:
-            for profile in component.profiles:
-                if profile not in profiles:
-                    break
-            else:
-                register_instance.register_component(component)
+    def filter_components(components_dict):
+        result_dict = {}
+        for t, components in components_dict.items():
+            for component in components:
+                for profile in component.profiles:
+                    if profile not in profiles:
+                        break
+                else:
+                    result_dict.setdefault(t, []).append(component)
+        return result_dict
+    register_instance._components = filter_components(register._components)
+    register_instance._scopes = filter_components(register._scopes)
+    # print(register_instance._scopes)
+    # print(register._scopes)
     register_instance.check(properties)
     return register_instance
 

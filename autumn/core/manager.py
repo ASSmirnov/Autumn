@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, LiteralString, Mapping, TypeVar, overload
+from typing import Any, LiteralString, Mapping, Type, TypeVar
 
 from .register import Register, create_register_instance
-from autumn.exceptions import AutomnConfigurationError
+from autumn.exceptions import AutomnComponentNotFound, AutomnConfigurationError
 
 
 @dataclass
@@ -42,8 +42,12 @@ class _ManagerInstance:
     def get_instances(self, interface: _T) -> list[_T]:
         return self._register.get_instances(interface, self.properties or {})
     
+    def get_session_object(self, interface: Type[_T], optional: bool=False) -> _T:
+        return self._register.get_session_object(interface, self.properties or {}, optional)
+    
     def get_config(self) -> Config:
         return self._config
+
 
 class _Manager:
 
@@ -86,17 +90,6 @@ class _Manager:
         self._instance.start()
         self._started = True
     
-    @overload
-    def get_instance(self, 
-                     interface: _T) -> _T:
-        ...
-    
-    @overload
-    def get_instance(self, 
-                     interface: _T,
-                     optional: bool) -> _T | None:
-        ...
-
     def get_instance(self, interface: _T, optional: bool=False):
         if not self._started:
             raise AutomnConfigurationError("Attempn to get instance before dm start")
@@ -106,5 +99,15 @@ class _Manager:
         if not self._started:
             raise AutomnConfigurationError("Attempn to get instance before dm start")
         return self._instance.get_instances(interface)
+
+    def get_property(self, name) -> Any:
+        if name in self._instance.properties:
+            return self._instance.properties[name]
+        raise AutomnComponentNotFound()
     
+    def get_session_object(self, interface: Type[_T], optional: bool=False) -> _T:
+        if not self._started:
+            raise AutomnConfigurationError("Attempn to get instance before dm start")
+        return self._instance.get_session_object(interface, optional)
+
 dm = _Manager()

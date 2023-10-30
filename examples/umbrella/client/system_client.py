@@ -1,15 +1,17 @@
+from typing import Any
+from autumn.core.scope import SINGLETON
+from autumn.public import component
+from examples.umbrella.interfaces import IClient
 
-from typing import ClassVar
-from autumn.public import component, SINGLETON
-from client.types import UmbrellaClient
+current = 0
 
+@component(IClient, scope=SINGLETON, profiles=("prod", "system"))
+class Client:
 
-@component(interface=UmbrellaClient, scope=SINGLETON, profiles=("prod", "system"))
-class SystemClient:
-    NAME: ClassVar[str] = "@@SystemClient@@"
-
-    def request(self) -> dict:
-
-        return {"payload": None, 
-                "say": "OK",
-                "credentials": None}
+    def request(self, url: str, **kwargs) -> dict[str, Any]:
+        print(f"Requesting {url}")
+        global current
+        current += 1
+        return {
+            "payload": {"id": current, "sheeps": [{"name": "Dolly"}, {"name": "Sveta"}]}
+        }
