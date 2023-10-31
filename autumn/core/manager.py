@@ -1,6 +1,9 @@
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, LiteralString, Mapping, Type, TypeVar
+from typing import Any, LiteralString, Mapping, Self, Type, TypeVar
+
+from autumn.core.scope import clear_caches
 
 from .register import Register, create_register_instance
 from autumn.exceptions import AutomnComponentNotFound, AutomnConfigurationError
@@ -10,6 +13,10 @@ from autumn.exceptions import AutomnComponentNotFound, AutomnConfigurationError
 class Config:
     active_profiles: list[str]
     properties: dict[str, Any]
+
+    def copy(self) -> Self:
+        return Config(active_profiles=self.active_profiles[:],
+                    properties=self.properties.copy())
 
 _T = TypeVar("_T")
 
@@ -30,6 +37,7 @@ class _ManagerInstance:
             self._config.active_profiles.append(profile)
 
     def start(self):
+        clear_caches()
         self._register = create_register_instance(self._config.active_profiles,
                                                   self._config.properties.keys())
         self.properties = MappingProxyType(self._config.properties)
@@ -67,19 +75,31 @@ class _Manager:
         if self._started:
             raise AutomnConfigurationError("Attempn to initialize dm after start")
         self.test_mode = test_mode
-
+    
+    @contextmanager
     def copy(self) -> None:
         if not self.test_mode:
             raise AutomnConfigurationError("Attempt to stash frozen dm")
-        config = self._instance.get_config()
+        config = self._instance.get_config() 
+        self._started = False
+        self._instance = _ManagerInstance(config=config.copy())
+        yield
         self._started = False
         self._instance = _ManagerInstance(config=config)
+        self.start()
     
+    @contextmanager
     def clear(self) -> None:
         if not self.test_mode:
             raise AutomnConfigurationError("Attempt to stash frozen dm")
         self._started = False
+        config = self._instance.get_config() 
         self._instance = _ManagerInstance()
+        yield
+        self._started = False
+        self._instance = _ManagerInstance(config=config)
+        self.start()
+
     
     def start(self) -> None:
         if self._started:

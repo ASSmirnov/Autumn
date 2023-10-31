@@ -168,7 +168,7 @@ class Register:
                                                         f"for component {component.cls} for field `{field_name}`, "
                                                         "more than one candidates found but the dependency is not a collection")
                 for property_name, property in component.properties.items():
-                    if property_name not in properties:
+                    if property.name not in properties:
                         if not property.optional:
                             raise AutomnComponentNotFound("Unsatisfied dependency found for "
                                                           f"component {component.cls} for field `{property_name}`, "

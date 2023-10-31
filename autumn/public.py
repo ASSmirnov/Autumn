@@ -17,6 +17,8 @@ def component(interface: Any | None = None,
               *, 
               scope: str, 
               profiles: tuple[str, ...] = ()):
+    if not isinstance(profiles, (list, tuple)):
+        profiles = (profiles, )
     def decorator(cls):
         component = create_component(interface=interface,
                                      scope=scope,
@@ -80,6 +82,8 @@ def autowired_method(func):
 
 
 def scope(name: LiteralString, profiles: tuple[str, ...] = ()):
+    if not isinstance(profiles, (list, tuple)):
+        profiles = (profiles, )
     if not isinstance(name, str):
         raise AutomnConfigurationError("Scope name must be a string")
     def wrapper(cls):

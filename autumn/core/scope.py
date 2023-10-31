@@ -31,7 +31,7 @@ PROTOTYPE = "prototype"
 SESSION = "session"
 
 class BaseCustomScope(ABC):
-
+    
     @abstractmethod 
     def get_instance(self) -> Any:
         ...
@@ -50,6 +50,9 @@ class _SingletonScope:
         instance = _create_instance(register, component, properties)
         self._cache[component.id] = instance
         return instance
+    
+    def clear_cache(self) -> None:
+        self._cache = {}
 
 class _PrototypeScope:
     
@@ -96,13 +99,13 @@ def _create_instance(register: "Register",
     fields = {}
 
     for name, property in component.properties.items():
-        if name in properties:
-            fields[name] = properties[name]
+        if property.name in properties:
+            fields[name] = properties[property.name]
         elif property.optional:
             fields[name] = None
         else:
             raise AutomnPropertyNotSet(f"Component {component.cls} cannot be built, "
-                                        f"property {property.name} wasn't configured")
+                                        f"property `{property.name}` wasn't configured")
     
     
     for name, dependency in component.dependencies.items():
@@ -136,4 +139,7 @@ def get_instance(register: "Register",
             instance = scope.get_instance(register, component, properties)
         else:
             instance = scope.get_instance()
-        return instance 
+        return instance
+    
+def clear_caches():
+    _singleton_scope.clear_cache()
