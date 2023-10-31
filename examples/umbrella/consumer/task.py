@@ -7,7 +7,7 @@ from examples.umbrella.helpers import SessionManager
 from examples.umbrella.interfaces import TaskProvider
 
 
-@component(scope="TaskSessionScope")
+@component(scope="TaskSessionScope", profiles=("prod", "umbrella"))
 class Task:
     task_definition: TaskDefinition
 
@@ -21,7 +21,7 @@ class TaskSession(BaseCustomScope):
         return Task(value)
 
 
-@component(TaskProvider, scope=SINGLETON)
+@component(TaskProvider, scope=SINGLETON, profiles=("prod", "system"))
 class UmbrellaTaskProvider(TaskProvider):
 
     @autowired_method

@@ -1,0 +1,14 @@
+{
+    "id": "local_task",
+    "sheeps": [{"name": "Luda"},
+                {"name": "Gretta"},
+                {"name": "Dasha"},
+                {"name": "Rita"},
+                {"name": "Sveta"},
+                {"name": "Gretta"},
+                {"name": "Tanya"},
+                {"name": "Rita"},
+                {"name": "Sveta"},
+                {"name": "Luda"}
+]
+}
