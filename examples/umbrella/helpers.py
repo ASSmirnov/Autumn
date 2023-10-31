@@ -1,5 +1,3 @@
-
-
 from typing import Any
 from autumn.core.scope import SINGLETON
 from autumn.public import component

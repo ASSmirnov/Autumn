@@ -30,6 +30,11 @@ SINGLETON = "singleton"
 PROTOTYPE = "prototype"
 SESSION = "session"
 
+class BaseCustomScope(ABC):
+
+    @abstractmethod 
+    def get_instance(self) -> Any:
+        ...
 
 class _SingletonScope:
 
@@ -59,12 +64,16 @@ _singleton_scope = _SingletonScope()
 _prototype_scope = _PrototypeScope()
 
 
-def _get_scope(component: "Component") -> _SingletonScope | _PrototypeScope:
+def _get_scope(component: "Component", 
+               register: "Register",
+               properties: Mapping[str, Any]) -> _SingletonScope | _PrototypeScope:
     if component.scope == SINGLETON:
         return _singleton_scope
     elif component.scope == PROTOTYPE:
         return _prototype_scope
-    raise AutomnConfigurationError(f"Unknown scopen {component.scope}")
+    else:
+        scope = register.get_scope(component.scope, properties)
+        return scope
 
 def _resolve_dependency(register: "Register",
                         component: "Component", 
@@ -72,8 +81,11 @@ def _resolve_dependency(register: "Register",
 
     draft_instance = draft_storage.get(component.id)
     if draft_instance is None:
-        scope = _get_scope(component)
-        instance = scope.get_instance(register, component, properties)
+        scope = _get_scope(component, register, properties)
+        if scope in (_singleton_scope, _prototype_scope):
+            instance = scope.get_instance(register, component, properties)
+        else:
+            instance = scope.get_instance()
     else:
         instance = draft_instance
     return instance
@@ -118,7 +130,9 @@ def get_instance(register: "Register",
                 component: "Component", 
                 properties: Mapping[str, Any]) -> Any:
     with draft_storage:
-        scope = _get_scope(component)
-        return scope.get_instance(register, component, properties)
-
-_T = TypeVar("_T")
+        scope = _get_scope(component, register, properties)
+        if scope in (_singleton_scope, _prototype_scope):
+            instance = scope.get_instance(register, component, properties)
+        else:
+            instance = scope.get_instance()
+        return instance 

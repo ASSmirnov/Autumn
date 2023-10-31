@@ -1,6 +1,7 @@
+from abc import ABC
 from typing import Any, Protocol
 
-from dtos import Task
+from dtos import TaskDefinition
 
 
 class IUmbrellaClient(Protocol):
@@ -16,10 +17,15 @@ class IConsumer(Protocol):
 
 class IExecutor(Protocol):
 
-    def execute(self, task: Task) -> None:
+    def execute(self, task: TaskDefinition) -> None:
         ... 
 
 class IClient(Protocol):
 
     def request(self, url: str, **kwargs) -> dict[str, Any]:
         ...
+
+class TaskProvider(ABC):
+
+    def get_task(self) -> TaskDefinition:
+        pass

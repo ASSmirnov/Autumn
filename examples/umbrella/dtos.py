@@ -6,6 +6,6 @@ class Sheep:
     name: str
 
 @dataclass
-class Task:
+class TaskDefinition:
     id: int
     sheeps: list[Sheep]

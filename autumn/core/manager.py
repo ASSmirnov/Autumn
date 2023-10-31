@@ -42,9 +42,6 @@ class _ManagerInstance:
     def get_instances(self, interface: _T) -> list[_T]:
         return self._register.get_instances(interface, self.properties or {})
     
-    def get_session_object(self, interface: Type[_T], optional: bool=False) -> _T:
-        return self._register.get_session_object(interface, self.properties or {}, optional)
-    
     def get_config(self) -> Config:
         return self._config
 
@@ -105,9 +102,4 @@ class _Manager:
             return self._instance.properties[name]
         raise AutomnComponentNotFound()
     
-    def get_session_object(self, interface: Type[_T], optional: bool=False) -> _T:
-        if not self._started:
-            raise AutomnConfigurationError("Attempn to get instance before dm start")
-        return self._instance.get_session_object(interface, optional)
-
 dm = _Manager()

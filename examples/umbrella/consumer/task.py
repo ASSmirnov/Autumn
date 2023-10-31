@@ -1,15 +1,29 @@
-from autumn.public import BaseScope, Injectable, scope
+from autumn.core.scope import SINGLETON
+from autumn.public import BaseCustomScope, Injectable, autowired_method, component, scope
 from typing import Annotated
-from examples.umbrella.dtos import Task
+from examples.umbrella.dtos import TaskDefinition
 
 from examples.umbrella.helpers import SessionManager
+from examples.umbrella.interfaces import TaskProvider
 
 
+@component(scope="TaskSessionScope")
+class Task:
+    task_definition: TaskDefinition
 
-@scope(Task, profiles=("prod", "umbrella"))
-class TaskSession(BaseScope):
+
+@scope("TaskSessionScope", profiles=("prod", "umbrella"))
+class TaskSession(BaseCustomScope):
     sessionManager: Annotated[SessionManager, Injectable]
 
-    def get_instance(self):
+    def get_instance(self) -> Task:
         value = self.sessionManager.get_session_value("task_session")
-        return value
+        return Task(value)
+
+
+@component(TaskProvider, scope=SINGLETON)
+class UmbrellaTaskProvider(TaskProvider):
+
+    @autowired_method
+    def get_task(self, task: Annotated[Task, Injectable]) -> TaskDefinition:
+        return task.task_definition
