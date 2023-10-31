@@ -24,7 +24,6 @@ class _Property:
 class InjectableType(Enum):
     property = "p"
     component = "c"
-    session_object = "s"
 
 
 @dataclass
@@ -86,11 +85,6 @@ def create_component(
                                          collection=None,
                                          optional=True)
                 dependencies[name] = dependency
-            case (t, InjectableDependency(InjectableType.component)):
-                dependency = _Dependency(interface=t,
-                                         collection=None,
-                                         optional=False)
-                dependencies[name] = dependency
             case (Collection(ct, t), InjectableDependency(InjectableType.component)):
                 dependency = _Dependency(interface=t,
                                          collection=ct,
@@ -99,13 +93,14 @@ def create_component(
             case (Optional(), InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=True)
                 properties[name] = property
+            case (t, InjectableDependency(InjectableType.component)):
+                dependency = _Dependency(interface=t,
+                                         collection=None,
+                                         optional=False)
+                dependencies[name] = dependency
             case (_, InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=False)
                 properties[name] = property
-            case (_, InjectableDependency(InjectableType.session_object)):
-                raise AutomnConfigurationError("InjectabjeSession is not applicable on "
-                                               "component definition level. You may use "
-                                               "injection with `autowared_method`")
 
     return Component(id=str(uuid4()),
                      scope=scope,
@@ -185,7 +180,7 @@ class Register:
 
     def get_instances(self, interface: _T, properties: Mapping[str, Any]) -> list[_T]:
         components = self.get_compnonents(interface)
-        return [self.get_instance(self, component, properties) for component in components]
+        return [get_instance(self, component, properties) for component in components]
 
     @overload
     def get_instance(self, interface: _T,
@@ -212,7 +207,6 @@ class Register:
     def get_scope(self, name: str, properties: Mapping[str, Any]) -> BaseCustomScope:
         scopes = self._scopes.get(name)
         if scopes is None:
-            print(self._scopes)
             raise AutomnComponentNotFound(f"Scope `{name}` not found")
         scope_component = scopes[0]
         scope_instance = get_instance(self, scope_component, properties)

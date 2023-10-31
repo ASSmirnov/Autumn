@@ -94,7 +94,7 @@ def _create_instance(register: "Register",
                      component: "Component", 
                      properties: Mapping[str, Any]) -> Any:
     fields = {}
-    
+
     for name, property in component.properties.items():
         if name in properties:
             fields[name] = properties[name]
@@ -121,6 +121,7 @@ def _create_instance(register: "Register",
             dependency_instances = []
             for dependency_component in dependency_components:
                 dependency_instance = _resolve_dependency(register, dependency_component, properties)
+                dependency_instances.append(dependency_instance)
             collection = dependency.collection(dependency_instances) 
             object.__setattr__(instance, name, collection)
     

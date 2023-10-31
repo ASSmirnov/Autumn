@@ -45,7 +45,7 @@ def extract_from_hint(type_hint: Any) -> Generic | Particular | Optional | Annot
                          args=tuple(extract_from_hint(a) for a in args[1:]))
     
     if origin_type == list:
-        return Collection(type=list, item_type=extract_from_hint(args[0]))
+        return Collection(collection_type=list, item_type=extract_from_hint(args[0]))
     
     if origin_type == tuple:
         if (len(args) == 2 and Ellipsis in args) or len(args) == 1:
