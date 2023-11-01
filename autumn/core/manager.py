@@ -80,25 +80,24 @@ class _Manager:
     def copy(self) -> None:
         if not self.test_mode:
             raise AutomnConfigurationError("Attempt to stash frozen dm")
-        config = self._instance.get_config() 
+        config = self._instance.get_config()
+        instance = self._instance
         self._started = False
         self._instance = _ManagerInstance(config=config.copy())
         yield
-        self._started = False
-        self._instance = _ManagerInstance(config=config)
-        self.start()
+        self._instance = instance
+        self._started = True
     
     @contextmanager
     def clear(self) -> None:
         if not self.test_mode:
             raise AutomnConfigurationError("Attempt to stash frozen dm")
         self._started = False
-        config = self._instance.get_config() 
+        instance = self._instance
         self._instance = _ManagerInstance()
         yield
-        self._started = False
-        self._instance = _ManagerInstance(config=config)
-        self.start()
+        self._instance = instance
+        self._started = True
 
     
     def start(self) -> None:

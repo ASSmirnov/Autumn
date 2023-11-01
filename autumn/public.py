@@ -16,7 +16,8 @@ from .core.scope import SINGLETON, PROTOTYPE, SESSION as __SESSION, BaseCustomSc
 def component(interface: Any | None = None,
               *, 
               scope: str, 
-              profiles: tuple[str, ...] = ()):
+              profiles: tuple[str, ...] = (),
+              frozen: bool = True):
     if not isinstance(profiles, (list, tuple)):
         profiles = (profiles, )
     def decorator(cls):
@@ -30,7 +31,7 @@ def component(interface: Any | None = None,
                                     order=False, 
                                     match_args=False, 
                                     slots=True, 
-                                    frozen=True)
+                                    frozen=frozen)
         component.cls = component_class
         register.register_component(component)
         return component_class
