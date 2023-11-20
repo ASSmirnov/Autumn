@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, TypeVar
-from autumn.exceptions import AutomnConfigurationError, AutomnPropertyNotSet, AutomnSessionNotEntered
+from typing import Any, Mapping
+from autumn.exceptions import AutomnConfigurationError, AutomnPropertyNotSet
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from autumn.core.register import Component, Register
@@ -28,7 +28,6 @@ draft_storage = _DraftStorage()
 
 SINGLETON = "singleton"
 PROTOTYPE = "prototype"
-SESSION = "session"
 
 class BaseCustomScope(ABC):
     
@@ -75,8 +74,7 @@ def _get_scope(component: "Component",
     elif component.scope == PROTOTYPE:
         return _prototype_scope
     else:
-        scope = register.get_scope(component.scope, properties)
-        return scope
+        raise AutomnConfigurationError(f"Custom scopes are not supported, {component.scope}") 
 
 def _resolve_dependency(register: "Register",
                         component: "Component", 

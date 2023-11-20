@@ -12,7 +12,3 @@ class AutomnAmbiguousDependency(Exception):
 
 class AutomnPropertyNotSet(Exception):
     pass
-
-
-class AutomnSessionNotEntered(Exception):
-    pass

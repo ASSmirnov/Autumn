@@ -1,15 +1,15 @@
-from abc import ABC, abstractmethod
+import inspect
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Type, dataclass_transform, LiteralString
+from typing import Any, Type, dataclass_transform
 from autumn.exceptions import AutomnConfigurationError
 
 from autumn.helpers.type_hints import Collection, Optional
-from .core.register import dependency_descrition
+from .core.register import Configuration, dependency_descrition
 
 from .core.register import register, create_component, InjectableDependency, InjectableType
 from .core.manager import dm
-from .core.scope import SINGLETON, PROTOTYPE, SESSION as __SESSION, BaseCustomScope
+from .core.scope import SINGLETON, PROTOTYPE
 
 
 @dataclass_transform()
@@ -20,21 +20,33 @@ def component(interface: Any | None = None,
               frozen: bool = True):
     if not isinstance(profiles, (list, tuple)):
         profiles = (profiles, )
-    def decorator(cls):
-        component = create_component(interface=interface,
-                                     scope=scope,
-                                     profiles=profiles,
-                                     cls=cls)
+    def decorator(cls_or_method):
+        if inspect.ismethod(cls_or_method):
+            if interface is None:
+                raise AutomnConfigurationError("Interface is not optional for components "
+                                               "configured via @configuration")
+            setattr(cls_or_method, "__component_args__", {"interface": interface,
+                                                          "scope": scope,
+                                                          "profiles": profiles})
+            return cls_or_method
+        elif inspect.isclass(cls_or_method):
+            component = create_component(interface=interface,
+                                        scope=scope,
+                                        profiles=profiles,
+                                        cls=cls_or_method)
 
-        component_class = dataclass(cls,
-                                    eq=False, 
-                                    order=False, 
-                                    match_args=False, 
-                                    slots=True, 
-                                    frozen=frozen)
-        component.cls = component_class
-        register.register_component(component)
-        return component_class
+            component_class = dataclass(cls_or_method,
+                                        eq=False, 
+                                        order=False, 
+                                        match_args=False, 
+                                        slots=True, 
+                                        frozen=frozen)
+            component.cls = component_class
+            register.register_component(component)
+            return component_class
+        else:
+            raise AutomnConfigurationError("@component decorator can be applied only to classes "
+                                           "or methods belonging to @configuration classes")
     return decorator
 
 
@@ -80,30 +92,40 @@ def autowired_method(func):
     return decorator
 
 
+def configuration(*,
+                  profiles: tuple[str, ...] = (),
+                  frozen: bool = True):
+    def decorator(cls):
+        configuration_component = create_component(profiles=profiles,
+                                                   scope=SINGLETON,
+                                                   cls=cls)
+        register.register_component(configuration_component)
+        for member_name, member in cls.__dict__:
+            component_args = getattr(member, "__component_args__")
+            if component_args:
+                configured_component = create_component(interface=component_args["interface"],
+                                                        scope=component_args["scope"],
+                                                        profiles=component_args["profiles"],
+                                                        factory=Configuration(cls=cls, method_name=member_name)
+                                                        )
+                register.register_component(configured_component)
+        component_class = dataclass(configuration_component,
+                                        eq=False, 
+                                        order=False, 
+                                        match_args=False, 
+                                        slots=True, 
+                                        frozen=frozen)
+        configuration_component.cls = component_class
+        register.register_component(configuration_component)
 
-
-def scope(name: LiteralString, profiles: tuple[str, ...] = ()):
-    if not isinstance(profiles, (list, tuple)):
-        profiles = (profiles, )
-    if not isinstance(name, str):
-        raise AutomnConfigurationError("Scope name must be a string")
-    def wrapper(cls):
-        if not issubclass(cls, BaseCustomScope):
-            raise AutomnConfigurationError("Scope must derive BaseSession")
-        cls = component(scope=__SESSION,
-                        interface=name,
-                        profiles=profiles,
-                        )(cls)
         return cls
-    return wrapper
+    return decorator
 
 Injectable = InjectableDependency(type=InjectableType.component, args=())
 
 def _property(name: str) -> InjectableDependency:
     return InjectableDependency(type=InjectableType.property, args=(name, ))
 
-
-BaseCustomScope = BaseCustomScope
 Property = _property
 dm = dm
 SINGLETON = SINGLETON
