@@ -33,5 +33,5 @@ class SessionManager:
 
     def get_session_value(self, name) -> Any:
         if name not in self._sessions:
-            raise Exception()
+            raise Exception("Session is not active.")
         return self._sessions[name].value

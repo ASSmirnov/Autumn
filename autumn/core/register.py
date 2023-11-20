@@ -38,14 +38,14 @@ class Configuration:
 
 @dataclass
 class Component:
-    # id: str
+    id: str
     scope: str
     cls: Type # TODO do we need it?
     interface: Any | None
     profiles: tuple[str] = ()
     dependencies: dict[str, _Dependency] = field(default_factory=dict)
     properties: dict[str, _Property] = field(default_factory=dict)
-    factory: Configuration | None
+    factory: Configuration | None = None
 
 def dependency_descrition(original_type_hint: Any) -> (Any, Any):
     type_hint = extract_from_hint(original_type_hint)
@@ -78,8 +78,8 @@ def create_component(
     interface: Any | None,
     profiles: tuple[str, ...] = (),
     scope: str,
-    cls: Type | None,
-    factory: Configuration | None) -> Component:
+    cls: Type | None = None,
+    factory: Configuration | None = None) -> Component:
     if scope not in (PROTOTYPE, SINGLETON):
         raise AutomnConfigurationError(f"Custom dependencies are not supported {scope}")
 
@@ -113,7 +113,7 @@ def create_component(
             case (_, InjectableDependency(InjectableType.property, (n,))):
                 property = _Property(name=n, optional=False)
                 properties[name] = property
-    return Component(#id=str(uuid4()),
+    return Component(id=str(uuid4()),
                      scope=scope,
                      cls=cls,
                      interface=interface,
