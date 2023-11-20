@@ -94,6 +94,16 @@ def _resolve_dependency(register: "Register",
 def _create_instance(register: "Register",
                      component: "Component", 
                      properties: Mapping[str, Any]) -> Any:
+    if component.factory:
+        factory_instance = register.get_instance(component.factory.cls, properties)
+        instance_factory_method = getattr(factory_instance, component.factory.method_name)
+        return instance_factory_method()
+    else:
+        return _create_instance_from_dependencies(register, component, properties)
+
+def _create_instance_from_dependencies(register: "Register",
+                     component: "Component", 
+                     properties: Mapping[str, Any]) -> Any:
     fields = {}
 
     for name, property in component.properties.items():

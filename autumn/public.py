@@ -12,6 +12,10 @@ from .core.manager import dm
 from .core.scope import SINGLETON, PROTOTYPE
 
 
+def is_method(func):
+    qual = func.__qualname__
+    return "." in qual and "<locals>" not in qual and "<lambda>" not in qual
+
 @dataclass_transform()
 def component(interface: Any | None = None,
               *, 
@@ -21,15 +25,7 @@ def component(interface: Any | None = None,
     if not isinstance(profiles, (list, tuple)):
         profiles = (profiles, )
     def decorator(cls_or_method):
-        if inspect.ismethod(cls_or_method):
-            if interface is None:
-                raise AutomnConfigurationError("Interface is not optional for components "
-                                               "configured via @configuration")
-            setattr(cls_or_method, "__component_args__", {"interface": interface,
-                                                          "scope": scope,
-                                                          "profiles": profiles})
-            return cls_or_method
-        elif inspect.isclass(cls_or_method):
+        if inspect.isclass(cls_or_method):
             component = create_component(interface=interface,
                                         scope=scope,
                                         profiles=profiles,
@@ -44,9 +40,17 @@ def component(interface: Any | None = None,
             component.cls = component_class
             register.register_component(component)
             return component_class
+        elif is_method(cls_or_method):
+            if interface is None:
+                raise AutomnConfigurationError("Interface is not optional for components "
+                                               "configured via @configuration")
+            setattr(cls_or_method, "__component_args__", {"interface": interface,
+                                                          "scope": scope,
+                                                          "profiles": profiles})
+            return cls_or_method
         else:
             raise AutomnConfigurationError("@component decorator can be applied only to classes "
-                                           "or methods belonging to @configuration classes")
+                                           f"or methods belonging to @configuration classes, {cls_or_method}")
     return decorator
 
 
@@ -96,12 +100,14 @@ def configuration(*,
                   profiles: tuple[str, ...] = (),
                   frozen: bool = True):
     def decorator(cls):
-        configuration_component = create_component(profiles=profiles,
+        configuration_component = create_component(interface=cls,
+                                                   profiles=profiles,
                                                    scope=SINGLETON,
                                                    cls=cls)
         register.register_component(configuration_component)
-        for member_name, member in cls.__dict__:
-            component_args = getattr(member, "__component_args__")
+
+        for member_name, member in cls.__dict__.items():
+            component_args = getattr(member, "__component_args__", None)
             if component_args:
                 configured_component = create_component(interface=component_args["interface"],
                                                         scope=component_args["scope"],
@@ -109,16 +115,16 @@ def configuration(*,
                                                         factory=Configuration(cls=cls, method_name=member_name)
                                                         )
                 register.register_component(configured_component)
-        component_class = dataclass(configuration_component,
-                                        eq=False, 
-                                        order=False, 
-                                        match_args=False, 
-                                        slots=True, 
-                                        frozen=frozen)
+        component_class = dataclass(cls,
+                                    eq=False, 
+                                    order=False, 
+                                    match_args=False, 
+                                    slots=True, 
+                                    frozen=frozen)
         configuration_component.cls = component_class
         register.register_component(configuration_component)
 
-        return cls
+        return component_class
     return decorator
 
 Injectable = InjectableDependency(type=InjectableType.component, args=())

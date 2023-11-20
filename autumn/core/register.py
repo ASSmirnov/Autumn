@@ -40,7 +40,7 @@ class Configuration:
 class Component:
     id: str
     scope: str
-    cls: Type # TODO do we need it?
+    cls: Type
     interface: Any | None
     profiles: tuple[str] = ()
     dependencies: dict[str, _Dependency] = field(default_factory=dict)
@@ -85,41 +85,41 @@ def create_component(
 
     dependencies = {}
     properties = {}
-    if factory is not None:
-        pass
-    if cls is None:
+    if factory is None and cls is None:
         raise AutomnConfigurationError("Component must be a class or a configuration method")
-    for name, original_type_hint in cls.__annotations__.items():
-        type_hint = dependency_descrition(original_type_hint)
-        match type_hint:
-            case (Optional(t), InjectableDependency(InjectableType.component)):
-                dependency = _Dependency(interface=t,
-                                         collection=None,
-                                         optional=True)
-                dependencies[name] = dependency
-            case (Collection(ct, t), InjectableDependency(InjectableType.component)):
-                dependency = _Dependency(interface=t,
-                                         collection=ct,
-                                         optional=False)
-                dependencies[name] = dependency
-            case (Optional(), InjectableDependency(InjectableType.property, (n,))):
-                property = _Property(name=n, optional=True)
-                properties[name] = property
-            case (t, InjectableDependency(InjectableType.component)):
-                dependency = _Dependency(interface=t,
-                                         collection=None,
-                                         optional=False)
-                dependencies[name] = dependency
-            case (_, InjectableDependency(InjectableType.property, (n,))):
-                property = _Property(name=n, optional=False)
-                properties[name] = property
+    if cls:
+        for name, original_type_hint in cls.__annotations__.items():
+            type_hint = dependency_descrition(original_type_hint)
+            match type_hint:
+                case (Optional(t), InjectableDependency(InjectableType.component)):
+                    dependency = _Dependency(interface=t,
+                                            collection=None,
+                                            optional=True)
+                    dependencies[name] = dependency
+                case (Collection(ct, t), InjectableDependency(InjectableType.component)):
+                    dependency = _Dependency(interface=t,
+                                            collection=ct,
+                                            optional=False)
+                    dependencies[name] = dependency
+                case (Optional(), InjectableDependency(InjectableType.property, (n,))):
+                    property = _Property(name=n, optional=True)
+                    properties[name] = property
+                case (t, InjectableDependency(InjectableType.component)):
+                    dependency = _Dependency(interface=t,
+                                            collection=None,
+                                            optional=False)
+                    dependencies[name] = dependency
+                case (_, InjectableDependency(InjectableType.property, (n,))):
+                    property = _Property(name=n, optional=False)
+                    properties[name] = property
     return Component(id=str(uuid4()),
                      scope=scope,
                      cls=cls,
                      interface=interface,
                      profiles=profiles,
                      dependencies=dependencies,
-                     properties=properties)
+                     properties=properties,
+                     factory=factory)
 
 
 _T = TypeVar("_T")
@@ -139,11 +139,14 @@ class Register:
     def register_component(self, component: Component) -> None:
         # Class can be imported more then once, we should not
         # register them few times
-        component_id = self._get_id(component.cls)
+        if component.cls:
+            component_unique_name = self._get_id(component.cls)
+        else:
+            component_unique_name = "{}:{}".format(self._get_id(component.factory.cls), component.factory.method_name)
         global _registered_components
-        if component_id in _registered_components:
+        if component_unique_name in _registered_components:
             return
-        _registered_components.add(component_id)
+        _registered_components.add(component_unique_name)
 
         interface = component.interface or component.cls
         key = self._get_id(interface)
@@ -234,7 +237,7 @@ def create_register_instance(profiles: Iterable[str], properties: Iterable[str])
                     continue
                 if component.factory:
                     cls = component.factory.cls
-                    factory_component = register_instance.get_compnonent(cls)
+                    factory_component = register.get_compnonent(cls)
                     if not check_profiles(factory_component):
                         continue
                 result_dict.setdefault(t, []).append(component)
