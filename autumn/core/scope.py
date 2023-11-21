@@ -37,7 +37,9 @@ class BaseCustomScope(ABC):
 
 class _SingletonScope:
 
+
     def __init__(self):
+        self._cache_stack: list[str, Any] = []
         self._cache: dict[str, Any] = {}
 
     def get_instance(self, 
@@ -51,7 +53,11 @@ class _SingletonScope:
         return instance
     
     def clear_cache(self) -> None:
+        self._cache_stack.append(self._cache)
         self._cache = {}
+
+    def restore_cache(self) -> None:
+        self._cache = self._cache_stack.pop()
 
 class _PrototypeScope:
     
@@ -151,3 +157,6 @@ def get_instance(register: "Register",
     
 def clear_caches():
     _singleton_scope.clear_cache()
+
+def restore_caches():
+    _singleton_scope.restore_cache()

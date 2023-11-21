@@ -1,9 +1,9 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, LiteralString, Mapping, Self, Type, TypeVar
+from typing import Any, Mapping, Self, Type, TypeVar
 
-from autumn.core.scope import clear_caches
+from autumn.core.scope import clear_caches, restore_caches
 
 from .register import Register, create_register_instance
 from autumn.exceptions import AutomnComponentNotFound, AutomnConfigurationError
@@ -29,15 +29,14 @@ class _ManagerInstance:
                                       properties={})
         self.properties: Mapping[str, Any] | None = None  
 
-    def init_property(self, property_name: LiteralString, value: Any) -> None:
+    def init_property(self, property_name: str, value: Any) -> None:
         self._config.properties[property_name] = value
 
-    def init_profiles(self, *profiles: LiteralString) -> None:
+    def init_profiles(self, *profiles: str) -> None:
         for profile in profiles:
             self._config.active_profiles.append(profile)
 
     def start(self):
-        clear_caches()
         self._register = create_register_instance(self._config.active_profiles,
                                                   self._config.properties.keys())
         self.properties = MappingProxyType(self._config.properties)
@@ -58,46 +57,40 @@ class _Manager:
 
     def __init__(self) -> None:
         self._instance = _ManagerInstance()
+        self._instance_stack: list[_ManagerInstance] = []
         self._started: bool = False
-        self.test_mode: bool = False
  
-    def init_property(self, property_name: LiteralString, value: Any) -> None:
+    def init_property(self, property_name: str, value: Any) -> None:
         if self._started:
             raise AutomnConfigurationError("Attempt to initialize property after dm start")
         self._instance.init_property(property_name, value)
     
-    def init_profiles(self, *profiles: LiteralString) -> None:
+    def init_profiles(self, *profiles: str) -> None:
         if self._started:
             raise AutomnConfigurationError("Attempn to initialize profile after dm start")
         self._instance.init_profiles(*profiles)
     
-    def init(self, test_mode=False) -> None:
-        if self._started:
-            raise AutomnConfigurationError("Attempn to initialize dm after start")
-        self.test_mode = test_mode
     
     @contextmanager
-    def copy(self) -> None:
-        if not self.test_mode:
-            raise AutomnConfigurationError("Attempt to stash frozen dm")
+    def clear(self, 
+              *,
+              copy_profiles: bool = False,
+              copy_properties: bool = False,
+              ) -> None:
+        self._started = False
+        self._instance_stack.append(self._instance)
         config = self._instance.get_config()
-        instance = self._instance
-        self._started = False
-        self._instance = _ManagerInstance(config=config.copy())
+        new_config = Config()
+        if copy_profiles:
+            new_config.active_profiles = config.active_profiles[:]
+        if copy_properties:
+            new_config.properties = config.properties.copy()
+        self._instance = _ManagerInstance(new_config)
+        clear_caches()
         yield
-        self._instance = instance
+        self._instance = self._instance_stack.pop()
         self._started = True
-    
-    @contextmanager
-    def clear(self) -> None:
-        if not self.test_mode:
-            raise AutomnConfigurationError("Attempt to stash frozen dm")
-        self._started = False
-        instance = self._instance
-        self._instance = _ManagerInstance()
-        yield
-        self._instance = instance
-        self._started = True
+        restore_caches()
 
     
     def start(self) -> None:
